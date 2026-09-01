@@ -1,0 +1,99 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  ECS_CLUSTER: devops-demo-api-dev
+  ECS_SERVICE: devops-demo-api-dev
+  CODEDEPLOY_APP: devops-demo-api-dev
+  CODEDEPLOY_GROUP: devops-demo-api-dev-dg
+  ECR_REPOSITORY: devops-demo-api-dev
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve image tag from CI run
+        id: image
+        run: echo "tag=${{ github.event.workflow_run.head_sha }}" | cut -c1-14 >> "$GITHUB_OUTPUT"
+
+      - name: Get current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition devops-demo-api-dev \
+            --query taskDefinition > current-task-def.json
+
+      - name: Render new task definition with the new image
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: current-task-def.json
+          container-name: app
+          image: ${{ steps.image.outputs.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+
+      - name: Register new task definition
+        id: register
+        run: |
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://${{ steps.render.outputs.task-definition }} \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Build CodeDeploy appspec
+        run: |
+          sed "s|<TASK_DEFINITION_ARN>|${{ steps.register.outputs.arn }}|" \
+            ecs/appspec.yaml > appspec-rendered.yaml
+
+      - name: Create CodeDeploy deployment
+        id: deploy
+        run: |
+          APPSPEC_B64=$(base64 -w0 appspec-rendered.yaml)
+          DEPLOYMENT_ID=$(aws deploy create-deployment \
+            --application-name "$CODEDEPLOY_APP" \
+            --deployment-group-name "$CODEDEPLOY_GROUP" \
+            --revision "revisionType=AppSpecContent,appSpecContent={content=$(cat appspec-rendered.yaml | jq -Rs .)}" \
+            --query 'deploymentId' --output text)
+          echo "id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for deployment to finish (auto-rollback on failure)
+        run: |
+          aws deploy wait deployment-successful --deployment-id ${{ steps.deploy.outputs.id }}
+
+      - name: Smoke test against the ALB
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names devops-demo-api-dev \
+            --query 'LoadBalancers[0].DNSName' --output text)
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$ALB_DNS/health")
+            [ "$STATUS" = "200" ] && echo "Smoke test passed" && exit 0
+            sleep 5
+          done
+          echo "Smoke test failed" && exit 1
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {"text": "Deployment ${{ job.status }} for devops-demo-api (${{ steps.image.outputs.tag }})"}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
