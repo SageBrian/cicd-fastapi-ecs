@@ -6,6 +6,8 @@ CodeDeploy. Built as a portfolio project to demonstrate real-world DevOps
 practices, not just "docker push."
 
 ## Architecture
+   ![Architecture diagram](diagram.png)
+```
 GitHub PR ──► CI (lint, test, SAST, Trivy scan) ──► push image to ECR
                                                             │
                                                             ▼
@@ -20,7 +22,7 @@ GitHub PR ──► CI (lint, test, SAST, Trivy scan) ──► push image to EC
                                             ECS Fargate service
                                             (private subnets, 2 AZs)
 ```
- 
+
 Infra is provisioned by Terraform: VPC (public + private subnets across 2
 AZs, NAT gateway), ECR repo, ECS cluster + Fargate service, ALB with two
 target groups (blue/green), CodeDeploy app + deployment group, and IAM roles
