@@ -9,7 +9,6 @@ practices, not just "docker push."
 
 ```
 
-![Alt Text Description](diagram-1788350425705.png)
 GitHub PR ──► CI (lint, test, SAST, Trivy scan) ──► push image to ECR
                                                             │
                                                             ▼
