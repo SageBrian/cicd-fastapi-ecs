@@ -6,8 +6,6 @@ CodeDeploy. Built as a portfolio project to demonstrate real-world DevOps
 practices, not just "docker push."
 
 ## Architecture
-![Diagram](https://raw.githubusercontent.com/SageBrian/cicd-fastapi-ecs/edit/main/diagram.png)```
-
 GitHub PR ──► CI (lint, test, SAST, Trivy scan) ──► push image to ECR
                                                             │
                                                             ▼
