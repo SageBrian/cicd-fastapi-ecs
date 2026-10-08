@@ -73,8 +73,7 @@ resource "aws_iam_role" "github_actions" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          # Replace ORG/REPO with your actual GitHub org/repo
-          "token.actions.githubusercontent.com:sub" = "repo:ORG/REPO:*"
+          "token.actions.githubusercontent.com:sub" = "repo:SageBrian/cicd-fastapi-ecs:*"
         }
       }
     }]

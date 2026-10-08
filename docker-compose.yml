@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: cicd-fastapi-ecs-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_VERSION: "0.1.0"
+    restart: unless-stopped

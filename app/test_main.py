@@ -17,7 +17,9 @@ def test_root():
 
 
 def test_create_and_get_item():
-    resp = client.post("/items", json={"name": "widget", "description": "a test widget"})
+    resp = client.post(
+        "/items", json={"name": "widget", "description": "a test widget"}
+    )
     assert resp.status_code == 201
     item_id = resp.json()["id"]
 

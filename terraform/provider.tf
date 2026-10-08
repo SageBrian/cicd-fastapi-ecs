@@ -8,14 +8,13 @@ terraform {
     }
   }
 
-  # Remote state - create this S3 bucket + DynamoDB lock table once, by hand
-  # or via a small bootstrap script, before running `terraform init`.
+  # Remote state stored and locked in S3.
   backend "s3" {
-    bucket         = "REPLACE-ME-terraform-state-bucket"
-    key            = "cicd-fastapi-ecs/terraform.tfstate"
-    region         = "eu-west-1"
-    dynamodb_table = "REPLACE-ME-terraform-locks"
-    encrypt        = true
+    bucket       = "cicd-fastapi-ecs-tfstate-723468076990"
+    key          = "cicd-fastapi-ecs/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 
