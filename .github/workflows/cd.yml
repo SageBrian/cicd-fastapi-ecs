@@ -31,9 +31,13 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Resolve image tag from CI run
         id: image
-        run: echo "tag=${{ github.event.workflow_run.head_sha }}" | cut -c1-14 >> "$GITHUB_OUTPUT"
+        run: echo "tag=${{ github.event.workflow_run.head_sha }}" | cut -c1-7 >> "$GITHUB_OUTPUT"
 
       - name: Get current task definition
         run: |
@@ -47,7 +51,7 @@ jobs:
         with:
           task-definition: current-task-def.json
           container-name: app
-          image: ${{ steps.image.outputs.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
 
       - name: Register new task definition
         id: register
@@ -65,12 +69,12 @@ jobs:
       - name: Create CodeDeploy deployment
         id: deploy
         run: |
-          APPSPEC_B64=$(base64 -w0 appspec-rendered.yaml)
           DEPLOYMENT_ID=$(aws deploy create-deployment \
             --application-name "$CODEDEPLOY_APP" \
             --deployment-group-name "$CODEDEPLOY_GROUP" \
-            --revision "revisionType=AppSpecContent,appSpecContent={content=$(cat appspec-rendered.yaml | jq -Rs .)}" \
-            --query 'deploymentId' --output text)
+            --revision "revisionType=AppSpecContent,appSpecContent={content=$(jq -Rs . < appspec-rendered.yaml)}" \
+            --query 'deploymentId' \
+            --output text)
           echo "id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Wait for deployment to finish (auto-rollback on failure)
